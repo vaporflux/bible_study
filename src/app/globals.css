@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-parchment text-ink antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-parchment-dark/50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-leather-light/40 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-leather-light/60;
+  }
+}
+
+@layer components {
+  .chat-bubble-user {
+    @apply bg-leather text-parchment rounded-2xl rounded-br-sm px-5 py-3 shadow-md;
+  }
+
+  .chat-bubble-agent {
+    @apply bg-white/80 border border-parchment-dark rounded-2xl rounded-bl-sm px-5 py-3 shadow-sm;
+  }
+}
+
+/* Markdown content styling */
+.prose-bible h1,
+.prose-bible h2,
+.prose-bible h3 {
+  @apply font-display text-leather mt-4 mb-2;
+}
+
+.prose-bible h1 {
+  @apply text-xl font-bold;
+}
+
+.prose-bible h2 {
+  @apply text-lg font-bold;
+}
+
+.prose-bible h3 {
+  @apply text-base font-semibold;
+}
+
+.prose-bible p {
+  @apply mb-3 leading-relaxed;
+}
+
+.prose-bible ul,
+.prose-bible ol {
+  @apply mb-3 pl-5;
+}
+
+.prose-bible ul {
+  @apply list-disc;
+}
+
+.prose-bible ol {
+  @apply list-decimal;
+}
+
+.prose-bible li {
+  @apply mb-1;
+}
+
+.prose-bible blockquote {
+  @apply border-l-4 border-gold pl-4 italic my-3 text-ink-light;
+}
+
+.prose-bible strong {
+  @apply font-bold text-leather;
+}
+
+.prose-bible em {
+  @apply italic;
+}
+
+.prose-bible code {
+  @apply bg-parchment-dark/50 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.prose-bible pre {
+  @apply bg-parchment-dark/50 p-3 rounded-lg overflow-x-auto my-3;
+}
+
+.prose-bible a {
+  @apply text-leather-light underline decoration-gold hover:text-leather transition-colors;
+}
+
+.prose-bible hr {
+  @apply border-parchment-dark my-4;
+}
+
+.prose-bible table {
+  @apply w-full border-collapse my-3;
+}
+
+.prose-bible th {
+  @apply bg-parchment-dark/50 px-3 py-2 text-left font-semibold border border-parchment-dark;
+}
+
+.prose-bible td {
+  @apply px-3 py-2 border border-parchment-dark;
+}
+
+/* Typing indicator animation */
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.typing-dot:nth-child(1) { animation: typing-dot 1.4s infinite 0s; }
+.typing-dot:nth-child(2) { animation: typing-dot 1.4s infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: typing-dot 1.4s infinite 0.4s; }
+
+/* Fade in animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
