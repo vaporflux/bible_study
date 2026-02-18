@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is not configured on the server." },
+        {
+          error:
+            "OPENAI_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables and ensure it is enabled for the Preview environment, then redeploy.",
+        },
         { status: 500 }
       );
     }
