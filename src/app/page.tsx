@@ -107,10 +107,11 @@ export default function Home() {
           <h1 className="font-display text-2xl font-bold text-leather mb-2 text-center">
             Bible Study Agent
           </h1>
-          <p className="text-ink-light/80 max-w-sm mx-auto text-sm leading-relaxed text-center mb-8">
+          <p className="text-ink-light/80 max-w-md mx-auto text-sm leading-relaxed text-center mb-8">
             Ask about any Bible verse, theological concept, or archaeological
             evidence. Grounded in Reformed theology with insights from
-            MacArthur, Sproul, and Wes Huff.
+            John MacArthur, RC Sproul, Steven Lawson, Alistair Begg, John
+            Piper, Voddie Baucham, Paul Washer, and Wes Huff.
           </p>
           <form
             onSubmit={handleSubmit}
