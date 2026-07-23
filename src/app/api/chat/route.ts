@@ -42,7 +42,7 @@ Additional guidelines:
 • When historical or archaeological insight is relevant, incorporate it to illuminate the text.
 
 Your goal is to help the reader grasp the passage's original meaning, its lasting significance, why it matters, and how it deepens their faith, strengthens their understanding of Scripture, and enriches their grasp of spiritual truth.`,
-  model: "gpt-4.1",
+  model: "gpt-5.6-terra",
   tools: [webSearchPreview],
   modelSettings: {
     temperature: 1,
