@@ -46,7 +46,6 @@ Your goal is to help the reader grasp the passage's original meaning, its lastin
   tools: [webSearchPreview],
   modelSettings: {
     temperature: 1,
-    topP: 1,
     maxTokens: 2048,
     store: true,
   },
