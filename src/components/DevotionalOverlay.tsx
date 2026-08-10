@@ -28,13 +28,24 @@ export async function ensureDevotionalUpToDate(): Promise<void> {
   const res = await fetch("/api/devotional/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(55000),
     body: JSON.stringify({
       startDate: nextBatchStartDate(),
       batchSize: BATCH_SIZE,
       recentHistory: getRecentHistoryForContinuity(),
     }),
   });
-  const data = await res.json();
+  const raw = await res.text();
+  let data: { error?: string; entries?: DevotionalEntry[] };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      res.ok
+        ? "The devotional service returned an unexpected response."
+        : `Generation failed (status ${res.status}). It may have timed out — try again in a moment.`
+    );
+  }
   if (!res.ok) {
     throw new Error(data.error || "Failed to generate the devotional");
   }

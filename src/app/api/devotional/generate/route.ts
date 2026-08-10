@@ -73,6 +73,29 @@ function buildWriterPrompt(
     .join("\n\n---\n\n");
 }
 
+// Writing all 7 days' commentary in a single LLM call risks a long-running
+// response that can exceed the serverless function's time limit. Splitting
+// into small chunks run concurrently keeps each individual call short while
+// still covering the whole batch in roughly the time of the slowest chunk.
+const WRITER_CHUNK_SIZE = 2;
+
+async function writeChunk(
+  days: { date: string; reference: string; theme: string; scriptureText: string }[]
+): Promise<{ date: string; explanation: string; soWhat: string }[]> {
+  const runner = new Runner();
+  const result = await runner.run(devotionalWriterAgent, buildWriterPrompt(days));
+  if (!result.finalOutput) throw new Error("Writer returned no output");
+  return (result.finalOutput as { days: { date: string; explanation: string; soWhat: string }[] }).days;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -123,26 +146,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Could not fetch any passages from the ESV API" }, { status: 502 });
     }
 
-    const writeResult = await withTrace("Devotional Writer", async () => {
-      const runner = new Runner();
-      const result = await runner.run(devotionalWriterAgent, buildWriterPrompt(usable));
-      if (!result.finalOutput) throw new Error("Writer returned no output");
-      return result.finalOutput as { days: { date: string; explanation: string; soWhat: string }[] };
-    });
+    const writtenChunks = await withTrace("Devotional Writer", async () =>
+      Promise.all(chunk(usable, WRITER_CHUNK_SIZE).map(writeChunk))
+    );
+    const written = writtenChunks.flat();
 
-    const byDate = new Map(writeResult.days.map((w) => [w.date, w]));
+    const byDate = new Map(written.map((w) => [w.date, w]));
     const now = Date.now();
     const entries: DevotionalEntry[] = usable
       .filter((d) => byDate.has(d.date))
       .map((d) => {
-        const written = byDate.get(d.date)!;
+        const writtenEntry = byDate.get(d.date)!;
         return {
           date: d.date,
           reference: d.reference,
           theme: d.theme,
           scriptureText: d.scriptureText,
-          explanation: written.explanation,
-          soWhat: written.soWhat,
+          explanation: writtenEntry.explanation,
+          soWhat: writtenEntry.soWhat,
           completed: false,
           completedAt: null,
           generatedAt: now,
