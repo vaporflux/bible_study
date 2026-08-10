@@ -29,7 +29,6 @@ Guidelines:
 - Passage references must be short and precisely fetchable from the ESV Bible API (e.g. "James 1:2-4", "Psalm 23", "Romans 8:28-30", "1 Corinthians 13:4-7"). Choose whatever length is appropriate for a single day's devotional (typically a few verses to a short chapter) — do not always default to the same length.
 - Return only the structured plan. Do not write any commentary yet.`,
   model: "gpt-5.6-terra",
-  modelSettings: { temperature: 1.3 },
   outputType: BatchPlanSchema,
 });
 
