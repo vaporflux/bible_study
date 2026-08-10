@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback, FormEvent } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import Sidebar from "@/components/Sidebar";
+import DevotionalButton from "@/components/DevotionalButton";
+import DevotionalOverlay, { ensureDevotionalUpToDate } from "@/components/DevotionalOverlay";
 import {
   Message,
   Conversation,
@@ -22,12 +24,21 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [devotionalOpen, setDevotionalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load conversations from localStorage on mount
   useEffect(() => {
     setConversations(loadConversations());
+  }, []);
+
+  // Opportunistically top up the devotional plan in the background on load,
+  // so it's usually already ready by the time the user opens the overlay.
+  useEffect(() => {
+    ensureDevotionalUpToDate().catch(() => {
+      // Silent — the overlay itself will retry and surface any error when opened.
+    });
   }, []);
 
   const refreshConversations = useCallback(() => {
@@ -167,6 +178,12 @@ export default function Home() {
         onNewChat={startNewChat}
         onDelete={handleDelete}
       />
+
+      <DevotionalOverlay isOpen={devotionalOpen} onClose={() => setDevotionalOpen(false)} />
+
+      {!sidebarOpen && !devotionalOpen && (
+        <DevotionalButton onClick={() => setDevotionalOpen(true)} />
+      )}
 
       {!hasMessages ? (
         /* Welcome Screen - centered for mobile */

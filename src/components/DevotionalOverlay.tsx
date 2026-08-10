@@ -1,0 +1,183 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import TypingIndicator from "@/components/TypingIndicator";
+import DevotionalDay from "@/components/DevotionalDay";
+import DevotionalCalendar from "@/components/DevotionalCalendar";
+import {
+  DevotionalEntry,
+  BATCH_SIZE,
+  todayKey,
+  getEntryForDate,
+  getAllEntriesSorted,
+  needsMoreDays,
+  nextBatchStartDate,
+  getRecentHistoryForContinuity,
+  appendBatch,
+  markCompleted,
+  computeStreak,
+} from "@/lib/devotional";
+
+interface DevotionalOverlayProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export async function ensureDevotionalUpToDate(): Promise<void> {
+  if (!needsMoreDays()) return;
+  const res = await fetch("/api/devotional/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      startDate: nextBatchStartDate(),
+      batchSize: BATCH_SIZE,
+      recentHistory: getRecentHistoryForContinuity(),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to generate the devotional");
+  }
+  appendBatch(data.entries as DevotionalEntry[]);
+}
+
+export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlayProps) {
+  const [view, setView] = useState<"today" | "calendar">("today");
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey());
+  const [planVersion, setPlanVersion] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const generatingRef = useRef(false);
+
+  const runEnsureUpToDate = useCallback(async () => {
+    if (generatingRef.current) return;
+    if (!needsMoreDays()) return;
+    generatingRef.current = true;
+    setIsGenerating(true);
+    setError(null);
+    try {
+      await ensureDevotionalUpToDate();
+      setSelectedDate(todayKey());
+      setPlanVersion((v) => v + 1);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      generatingRef.current = false;
+      setIsGenerating(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      runEnsureUpToDate();
+    }
+  }, [isOpen, runEnsureUpToDate]);
+
+  if (!isOpen) return null;
+
+  const entries = getAllEntriesSorted();
+  const streak = computeStreak();
+  const selectedEntry = getEntryForDate(selectedDate);
+
+  const handleToggleComplete = (dateKey: string) => {
+    const entry = getEntryForDate(dateKey);
+    markCompleted(dateKey, !entry?.completed);
+    setPlanVersion((v) => v + 1);
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-40 transition-opacity" onClick={onClose} />
+
+      <div className="fixed inset-x-0 bottom-0 top-8 md:inset-x-auto md:right-6 md:left-6 md:top-10 md:bottom-10 md:max-w-2xl md:mx-auto bg-parchment border border-parchment-dark/50 rounded-t-2xl md:rounded-2xl z-50 flex flex-col shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-parchment-dark/50 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <h2 className="font-display font-bold text-leather text-sm">Daily Devotional</h2>
+            <span className="text-[10px] bg-gold/15 text-leather rounded-full px-2 py-0.5 font-medium">
+              {streak}-day streak
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setView(view === "today" ? "calendar" : "today")}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-parchment-dark/30 transition-colors text-ink-light"
+              aria-label={view === "today" ? "View history" : "Back to today"}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {view === "today" ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
+                )}
+              </svg>
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-parchment-dark/30 transition-colors text-ink-light"
+              aria-label="Close devotional"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {isGenerating && (
+            <div className="flex justify-center py-6">
+              <TypingIndicator />
+            </div>
+          )}
+
+          {!isGenerating && error && (
+            <div className="flex justify-center">
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm max-w-md">
+                <p className="font-semibold mb-0.5">Error</p>
+                <p>{error}</p>
+                <button
+                  onClick={runEnsureUpToDate}
+                  className="mt-2 text-xs underline hover:no-underline"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isGenerating && !error && view === "today" && selectedEntry && (
+            <DevotionalDay entry={selectedEntry} onToggleComplete={handleToggleComplete} />
+          )}
+
+          {!isGenerating && !error && view === "today" && !selectedEntry && (
+            <p className="text-sm text-ink-light/60 text-center mt-6">
+              No devotional for this day yet.
+            </p>
+          )}
+
+          {!isGenerating && !error && view === "calendar" && (
+            <DevotionalCalendar
+              entries={entries}
+              streak={streak}
+              selectedDate={selectedDate}
+              onSelectDate={(dateKey) => {
+                setSelectedDate(dateKey);
+                setView("today");
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

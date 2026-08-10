@@ -1,0 +1,162 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { Agent, Runner, withTrace } from "@openai/agents";
+import { fetchEsvPassage } from "@/lib/esv";
+import { addDays, DevotionalEntry } from "@/lib/devotional";
+
+const PlanItemSchema = z.object({
+  date: z.string(),
+  reference: z.string(),
+  theme: z.string(),
+});
+const BatchPlanSchema = z.object({ days: z.array(PlanItemSchema) });
+
+const WriterItemSchema = z.object({
+  date: z.string(),
+  explanation: z.string(),
+  soWhat: z.string(),
+});
+const BatchWriteSchema = z.object({ days: z.array(WriterItemSchema) });
+
+const devotionalPlannerAgent = new Agent({
+  name: "Devotional Planner",
+  instructions: `You select Bible passages and themes for a daily devotional series. You will be given a list of target dates and a compact history of passages/themes already covered recently.
+
+Guidelines:
+- Choose exactly one passage reference and one short theme per given date, in order.
+- Do not repeat any passage or theme already listed in the recent history. You may continue a thematic arc across a few consecutive days, or deliberately start a new one — this is a devotional, not a sequential verse-by-verse book study, so passages may come from anywhere in Scripture as fits the theme.
+- Passage references must be short and precisely fetchable from the ESV Bible API (e.g. "James 1:2-4", "Psalm 23", "Romans 8:28-30", "1 Corinthians 13:4-7"). Choose whatever length is appropriate for a single day's devotional (typically a few verses to a short chapter) — do not always default to the same length.
+- Return only the structured plan. Do not write any commentary yet.`,
+  model: "gpt-5.6-terra",
+  outputType: BatchPlanSchema,
+});
+
+const devotionalWriterAgent = new Agent({
+  name: "Devotional Writer",
+  instructions: `You write short daily devotionals reflecting the theological instincts and interpretive approach of expositors such as John MacArthur, R.C. Sproul, Steven Lawson, Alistair Begg, John Piper, Voddie Baucham, and Paul Washer. Never quote or closely paraphrase any specific published devotional — write original material inspired by their general approach and voice.
+
+For each day you are given the date, a theme, and the ACTUAL ESV scripture text already fetched for that day. Base every claim strictly on that quoted text — do not introduce verses or claims the text doesn't support.
+
+For each day, write exactly two sections:
+1. "explanation" — a single merged section combining historical/literary context, textual insight, and doctrinal/redemptive meaning, condensed (not an exhaustive multi-step treatise). Include one brief, original, relatable story or anecdote that illustrates the passage's truth.
+2. "soWhat" — practical, concrete life application: how this truth should shape belief, attitude, or conduct today.
+
+Do not include the scripture text itself in your output — it is rendered separately. Target roughly 350-500 words total per day, in markdown (you may use short headings, bold, or lists sparingly).`,
+  model: "gpt-5.6-terra",
+  outputType: BatchWriteSchema,
+});
+
+function buildPlannerPrompt(
+  dates: string[],
+  recentHistory: { date: string; reference: string; theme: string }[]
+): string {
+  const historyLines =
+    recentHistory.length > 0
+      ? recentHistory.map((h) => `- ${h.date}: ${h.reference} (${h.theme})`).join("\n")
+      : "(none — this is the very first batch)";
+
+  return `Recently covered passages/themes (most recent first), to avoid repeating:
+${historyLines}
+
+Plan the following dates, one passage + theme each, in order:
+${dates.join("\n")}`;
+}
+
+function buildWriterPrompt(
+  days: { date: string; reference: string; theme: string; scriptureText: string }[]
+): string {
+  return days
+    .map(
+      (d) =>
+        `Date: ${d.date}\nReference: ${d.reference}\nTheme: ${d.theme}\nScripture text:\n${d.scriptureText}`
+    )
+    .join("\n\n---\n\n");
+}
+
+export const maxDuration = 60;
+
+export async function POST(request: NextRequest) {
+  try {
+    const { startDate, batchSize = 7, recentHistory = [] } = await request.json();
+
+    if (!startDate || typeof startDate !== "string") {
+      return NextResponse.json({ error: "startDate is required" }, { status: 400 });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is not configured." },
+        { status: 500 }
+      );
+    }
+    if (!process.env.ESV_API_KEY) {
+      return NextResponse.json(
+        { error: "ESV_API_KEY is not configured." },
+        { status: 500 }
+      );
+    }
+
+    const dates = Array.from({ length: batchSize }, (_, i) => addDays(startDate, i));
+
+    const plan = await withTrace("Devotional Planner", async () => {
+      const runner = new Runner();
+      const result = await runner.run(devotionalPlannerAgent, buildPlannerPrompt(dates, recentHistory));
+      if (!result.finalOutput) throw new Error("Planner returned no output");
+      return result.finalOutput as { days: { date: string; reference: string; theme: string }[] };
+    });
+
+    const fetched = await Promise.all(
+      plan.days.map(async (d) => {
+        try {
+          const passage = await fetchEsvPassage(d.reference);
+          return { ...d, reference: passage.reference, scriptureText: passage.text, ok: true as const };
+        } catch (err) {
+          console.error(`ESV fetch failed for "${d.reference}":`, err);
+          return { ...d, ok: false as const };
+        }
+      })
+    );
+    const usable = fetched.filter(
+      (d): d is typeof d & { ok: true; scriptureText: string } => d.ok
+    );
+
+    if (usable.length === 0) {
+      return NextResponse.json({ error: "Could not fetch any passages from the ESV API" }, { status: 502 });
+    }
+
+    const writeResult = await withTrace("Devotional Writer", async () => {
+      const runner = new Runner();
+      const result = await runner.run(devotionalWriterAgent, buildWriterPrompt(usable));
+      if (!result.finalOutput) throw new Error("Writer returned no output");
+      return result.finalOutput as { days: { date: string; explanation: string; soWhat: string }[] };
+    });
+
+    const byDate = new Map(writeResult.days.map((w) => [w.date, w]));
+    const now = Date.now();
+    const entries: DevotionalEntry[] = usable
+      .filter((d) => byDate.has(d.date))
+      .map((d) => {
+        const written = byDate.get(d.date)!;
+        return {
+          date: d.date,
+          reference: d.reference,
+          theme: d.theme,
+          scriptureText: d.scriptureText,
+          explanation: written.explanation,
+          soWhat: written.soWhat,
+          completed: false,
+          completedAt: null,
+          generatedAt: now,
+        };
+      });
+
+    if (entries.length === 0) {
+      return NextResponse.json({ error: "Devotional writer returned no usable entries" }, { status: 502 });
+    }
+
+    return NextResponse.json({ entries });
+  } catch (error: unknown) {
+    console.error("Devotional generation error:", error);
+    const message = error instanceof Error ? error.message : "An unexpected error occurred";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
