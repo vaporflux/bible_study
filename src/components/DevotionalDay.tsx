@@ -34,18 +34,12 @@ export default function DevotionalDay({ entry, onToggleComplete }: DevotionalDay
         <p className="text-[11px] text-ink-light/60 mt-2 pl-4">{ESV_COPYRIGHT}</p>
       </div>
 
-      <div>
-        <h4 className="font-display text-sm font-bold text-leather mb-1">Explanation</h4>
-        <div className="prose-bible text-sm">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.explanation}</ReactMarkdown>
-        </div>
+      <div className="prose-bible text-sm">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.explanation}</ReactMarkdown>
       </div>
 
-      <div className="bg-white/60 border border-parchment-dark rounded-xl p-4">
-        <h4 className="font-display text-sm font-bold text-leather mb-1">So What?</h4>
-        <div className="prose-bible text-sm">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.soWhat}</ReactMarkdown>
-        </div>
+      <div className="bg-white/60 border border-parchment-dark rounded-xl p-4 prose-bible text-sm">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.soWhat}</ReactMarkdown>
       </div>
 
       <button

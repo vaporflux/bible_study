@@ -41,7 +41,9 @@ For each day, write exactly two sections:
 1. "explanation" — a single merged section combining historical/literary context, original language/textual insight, careful exegesis of what the passage actually says, and sound hermeneutical reasoning about what it means — grounded strictly in the quoted text, prioritizing authorial intent and canonical consistency over speculation. Go deep into the text itself rather than illustrating it with outside stories or anecdotes.
 2. "soWhat" — practical, concrete life application: how this truth should shape belief, attitude, or conduct today.
 
-Do not include the scripture text itself in your output — it is rendered separately. Target roughly 350-500 words total per day, in markdown (you may use short headings, bold, or lists sparingly).`,
+Each field's text must begin with exactly one markdown heading as its very first line — "explanation" starts with "## Explanation", "soWhat" starts with "## So What?" — followed by the content. Do not repeat that heading again anywhere in the same field, and do not add any other top-level heading.
+
+Do not include the scripture text itself in your output — it is rendered separately. Target roughly 350-500 words total per day, in markdown (you may use bold or lists sparingly beyond the required heading).`,
   model: "gpt-5.6-terra",
   outputType: BatchWriteSchema,
 });
