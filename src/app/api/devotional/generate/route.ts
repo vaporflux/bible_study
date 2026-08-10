@@ -38,7 +38,7 @@ const devotionalWriterAgent = new Agent({
 For each day you are given the date, a theme, and the ACTUAL ESV scripture text already fetched for that day. Base every claim strictly on that quoted text — do not introduce verses or claims the text doesn't support.
 
 For each day, write exactly two sections:
-1. "explanation" — a single merged section combining historical/literary context, textual insight, and doctrinal/redemptive meaning, condensed (not an exhaustive multi-step treatise). Include one brief, original, relatable story or anecdote that illustrates the passage's truth.
+1. "explanation" — a single merged section combining historical/literary context, original language/textual insight, careful exegesis of what the passage actually says, and sound hermeneutical reasoning about what it means — grounded strictly in the quoted text, prioritizing authorial intent and canonical consistency over speculation. Go deep into the text itself rather than illustrating it with outside stories or anecdotes.
 2. "soWhat" — practical, concrete life application: how this truth should shape belief, attitude, or conduct today.
 
 Do not include the scripture text itself in your output — it is rendered separately. Target roughly 350-500 words total per day, in markdown (you may use short headings, bold, or lists sparingly).`,
