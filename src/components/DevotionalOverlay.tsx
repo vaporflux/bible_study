@@ -110,6 +110,10 @@ export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlay
   const entries = getAllEntriesSorted();
   const streak = computeStreak();
   const displayedEntry = manualDay !== null ? getEntryByDay(manualDay) : getCurrentEntry();
+  const displayedIndex = displayedEntry ? entries.findIndex((e) => e.day === displayedEntry.day) : -1;
+  const prevEntry = displayedIndex > 0 ? entries[displayedIndex - 1] : undefined;
+  const nextEntry =
+    displayedIndex >= 0 && displayedIndex < entries.length - 1 ? entries[displayedIndex + 1] : undefined;
 
   const handleToggleComplete = (day: number) => {
     const entry = getEntryByDay(day);
@@ -173,6 +177,34 @@ export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlay
             </button>
           </div>
         </div>
+
+        {view === "today" && displayedEntry && (
+          <div className="flex items-center justify-between px-4 py-2 border-b border-parchment-dark/30 flex-shrink-0">
+            <button
+              onClick={() => prevEntry && setManualDay(prevEntry.day)}
+              disabled={!prevEntry}
+              aria-label="Previous devotional"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-parchment-dark/30 transition-colors text-ink-light disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-xs text-ink-light/60 font-medium">
+              Day {displayedEntry.day} of {entries.length}
+            </span>
+            <button
+              onClick={() => nextEntry && setManualDay(nextEntry.day)}
+              disabled={!nextEntry}
+              aria-label="Next devotional"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-parchment-dark/30 transition-colors text-ink-light disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {isGenerating && (
