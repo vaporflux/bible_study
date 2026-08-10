@@ -5,15 +5,15 @@ import { DevotionalEntry } from "@/lib/devotional";
 interface DevotionalCalendarProps {
   entries: DevotionalEntry[];
   streak: number;
-  selectedDate: string;
-  onSelectDate: (dateKey: string) => void;
+  selectedDay: number;
+  onSelectDay: (day: number) => void;
 }
 
 export default function DevotionalCalendar({
   entries,
   streak,
-  selectedDate,
-  onSelectDate,
+  selectedDay,
+  onSelectDay,
 }: DevotionalCalendarProps) {
   return (
     <div className="space-y-4">
@@ -30,10 +30,10 @@ export default function DevotionalCalendar({
         <div className="space-y-1">
           {entries.map((e) => (
             <button
-              key={e.date}
-              onClick={() => onSelectDate(e.date)}
+              key={e.day}
+              onClick={() => onSelectDay(e.day)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all text-sm ${
-                e.date === selectedDate
+                e.day === selectedDay
                   ? "bg-gold/15 border border-gold/30 text-leather font-medium"
                   : "hover:bg-white/50 text-ink-light hover:text-ink"
               }`}
@@ -52,7 +52,10 @@ export default function DevotionalCalendar({
               <div className="flex-1 min-w-0">
                 <p className="truncate leading-snug">{e.reference}</p>
                 <p className="text-[10px] text-ink-light/50 mt-0.5">
-                  {new Date(e.date + "T00:00:00").toLocaleDateString()} &middot; {e.theme}
+                  Day {e.day} &middot; {e.theme}
+                  {e.completed && e.completedAt && (
+                    <> &middot; Completed {new Date(e.completedAt).toLocaleDateString()}</>
+                  )}
                 </p>
               </div>
             </button>

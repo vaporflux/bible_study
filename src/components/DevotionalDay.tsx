@@ -6,21 +6,20 @@ import { DevotionalEntry, ESV_COPYRIGHT } from "@/lib/devotional";
 
 interface DevotionalDayProps {
   entry: DevotionalEntry;
-  onToggleComplete: (dateKey: string) => void;
+  onToggleComplete: (day: number) => void;
 }
 
 export default function DevotionalDay({ entry, onToggleComplete }: DevotionalDayProps) {
-  const formattedDate = new Date(entry.date + "T00:00:00").toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs text-ink-light/60">{formattedDate}</p>
+          <p className="text-xs text-ink-light/60">
+            Day {entry.day}
+            {entry.completed && entry.completedAt && (
+              <> &middot; Completed {new Date(entry.completedAt).toLocaleDateString()}</>
+            )}
+          </p>
           <h3 className="font-display text-lg font-bold text-leather">{entry.reference}</h3>
         </div>
         <span className="text-xs bg-gold/15 text-leather rounded-full px-3 py-1 font-medium flex-shrink-0">
@@ -50,7 +49,7 @@ export default function DevotionalDay({ entry, onToggleComplete }: DevotionalDay
       </div>
 
       <button
-        onClick={() => onToggleComplete(entry.date)}
+        onClick={() => onToggleComplete(entry.day)}
         className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
           entry.completed
             ? "bg-leather text-parchment hover:bg-ink"

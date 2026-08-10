@@ -6,12 +6,12 @@ import DevotionalDay from "@/components/DevotionalDay";
 import DevotionalCalendar from "@/components/DevotionalCalendar";
 import {
   DevotionalEntry,
-  BATCH_SIZE,
-  todayKey,
-  getEntryForDate,
+  getCurrentEntry,
+  getEntryByDay,
   getAllEntriesSorted,
-  needsMoreDays,
-  nextBatchStartDate,
+  needsMoreEntries,
+  neededCount,
+  nextDayNumbers,
   getRecentHistoryForContinuity,
   appendBatch,
   markCompleted,
@@ -24,14 +24,14 @@ interface DevotionalOverlayProps {
 }
 
 export async function ensureDevotionalUpToDate(): Promise<void> {
-  if (!needsMoreDays()) return;
+  const count = neededCount();
+  if (count === 0) return;
   const res = await fetch("/api/devotional/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     signal: AbortSignal.timeout(55000),
     body: JSON.stringify({
-      startDate: nextBatchStartDate(),
-      batchSize: BATCH_SIZE,
+      dayNumbers: nextDayNumbers(count),
       recentHistory: getRecentHistoryForContinuity(),
     }),
   });
@@ -54,22 +54,24 @@ export async function ensureDevotionalUpToDate(): Promise<void> {
 
 export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlayProps) {
   const [view, setView] = useState<"today" | "calendar">("today");
-  const [selectedDate, setSelectedDate] = useState<string>(todayKey());
-  const [planVersion, setPlanVersion] = useState(0);
+  const [manualDay, setManualDay] = useState<number | null>(null);
+  const [, setPlanVersion] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const generatingRef = useRef(false);
 
+  const refresh = () => setPlanVersion((v) => v + 1);
+
+  // Foreground refill: shows a loading state. Used when there's genuinely
+  // nothing to display yet (first launch, or just finished the last entry).
   const runEnsureUpToDate = useCallback(async () => {
-    if (generatingRef.current) return;
-    if (!needsMoreDays()) return;
+    if (generatingRef.current || !needsMoreEntries()) return;
     generatingRef.current = true;
     setIsGenerating(true);
     setError(null);
     try {
       await ensureDevotionalUpToDate();
-      setSelectedDate(todayKey());
-      setPlanVersion((v) => v + 1);
+      refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -78,22 +80,50 @@ export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlay
     }
   }, []);
 
+  // Background top-up: there's already something to show, so this refills
+  // the queue quietly without interrupting the current view.
+  const backgroundTopUp = useCallback(() => {
+    if (generatingRef.current || !needsMoreEntries()) return;
+    generatingRef.current = true;
+    ensureDevotionalUpToDate()
+      .then(refresh)
+      .catch(() => {
+        // Silent — an opportunistic refill failing isn't worth interrupting
+        // the user; it will simply retry next time the queue runs low.
+      })
+      .finally(() => {
+        generatingRef.current = false;
+      });
+  }, []);
+
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    if (getCurrentEntry()) {
+      backgroundTopUp();
+    } else {
       runEnsureUpToDate();
     }
-  }, [isOpen, runEnsureUpToDate]);
+  }, [isOpen, backgroundTopUp, runEnsureUpToDate]);
 
   if (!isOpen) return null;
 
   const entries = getAllEntriesSorted();
   const streak = computeStreak();
-  const selectedEntry = getEntryForDate(selectedDate);
+  const displayedEntry = manualDay !== null ? getEntryByDay(manualDay) : getCurrentEntry();
 
-  const handleToggleComplete = (dateKey: string) => {
-    const entry = getEntryForDate(dateKey);
-    markCompleted(dateKey, !entry?.completed);
-    setPlanVersion((v) => v + 1);
+  const handleToggleComplete = (day: number) => {
+    const entry = getEntryByDay(day);
+    const willComplete = !entry?.completed;
+    markCompleted(day, willComplete);
+    setManualDay(null); // return to the current/next devotional
+    refresh();
+    if (willComplete) {
+      if (getCurrentEntry()) {
+        backgroundTopUp();
+      } else {
+        runEnsureUpToDate();
+      }
+    }
   };
 
   return (
@@ -166,13 +196,13 @@ export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlay
             </div>
           )}
 
-          {!isGenerating && !error && view === "today" && selectedEntry && (
-            <DevotionalDay entry={selectedEntry} onToggleComplete={handleToggleComplete} />
+          {!isGenerating && !error && view === "today" && displayedEntry && (
+            <DevotionalDay entry={displayedEntry} onToggleComplete={handleToggleComplete} />
           )}
 
-          {!isGenerating && !error && view === "today" && !selectedEntry && (
+          {!isGenerating && !error && view === "today" && !displayedEntry && (
             <p className="text-sm text-ink-light/60 text-center mt-6">
-              No devotional for this day yet.
+              No devotional yet.
             </p>
           )}
 
@@ -180,9 +210,9 @@ export default function DevotionalOverlay({ isOpen, onClose }: DevotionalOverlay
             <DevotionalCalendar
               entries={entries}
               streak={streak}
-              selectedDate={selectedDate}
-              onSelectDate={(dateKey) => {
-                setSelectedDate(dateKey);
+              selectedDay={displayedEntry?.day ?? -1}
+              onSelectDay={(day) => {
+                setManualDay(day);
                 setView("today");
               }}
             />
