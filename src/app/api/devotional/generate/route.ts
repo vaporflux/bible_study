@@ -20,14 +20,16 @@ const BatchWriteSchema = z.object({ days: z.array(WriterItemSchema) });
 
 const devotionalPlannerAgent = new Agent({
   name: "Devotional Planner",
-  instructions: `You select Bible passages and themes for a personal daily devotional sequence. You will be given a list of day numbers (the user's Nth, N+1th, ... devotional — not calendar dates) and a compact history of passages/themes already covered recently.
+  instructions: `You select Bible passages and themes for a personal daily devotional sequence. You will be given a list of day numbers (the user's Nth, N+1th, ... devotional — not calendar dates), a compact history of passages/themes already covered recently, and a shuffled list of scripture categories to lean toward this time.
 
 Guidelines:
 - Choose exactly one passage reference and one short theme per given day number, in order.
 - Do not repeat any passage or theme already listed in the recent history. You may continue a thematic arc across a few consecutive days, or deliberately start a new one — this is a devotional, not a sequential verse-by-verse book study, so passages may come from anywhere in Scripture as fits the theme.
+- Do not habitually default to the handful of extremely famous "go-to" devotional passages (e.g. Psalm 1, Psalm 23, John 3:16, John 15:1-8, Romans 8, Philippians 4) just because they are well-known — that produces the same few passages appearing every time this planner runs, which defeats the purpose of a fresh sequence. Treat the provided category list as a genuine steer toward variety this run, not a suggestion to ignore.
 - Passage references must be short and precisely fetchable from the ESV Bible API (e.g. "James 1:2-4", "Psalm 23", "Romans 8:28-30", "1 Corinthians 13:4-7"). Choose whatever length is appropriate for a single day's devotional (typically a few verses to a short chapter) — do not always default to the same length.
 - Return only the structured plan. Do not write any commentary yet.`,
   model: "gpt-5.6-terra",
+  modelSettings: { temperature: 1.3 },
   outputType: BatchPlanSchema,
 });
 
@@ -48,7 +50,39 @@ Do not include the scripture text itself in your output — it is rendered separ
   outputType: BatchWriteSchema,
 });
 
-function buildPlannerPrompt(dayNumbers: number[], recentHistory: HistoryItem[]): string {
+// A genuinely random (not model-chosen) steer toward variety, since an LLM
+// given an unconstrained "pick a good passage" prompt gravitates hard toward
+// the same handful of famous passages — especially on a fresh start with no
+// history to avoid repeating. Shuffling this server-side guarantees actual
+// entropy between separate runs, rather than relying on sampling alone.
+const SCRIPTURE_CATEGORIES = [
+  "Old Testament narrative (e.g. Genesis, Exodus, Joshua, Ruth, 1-2 Samuel, 1-2 Kings)",
+  "the Psalms",
+  "Wisdom literature (Proverbs, Ecclesiastes, Job)",
+  "the Gospels (Matthew, Mark, Luke, John)",
+  "Acts",
+  "the Pauline epistles (Romans, 1-2 Corinthians, Galatians, Ephesians, Philippians, Colossians, 1-2 Thessalonians)",
+  "the Pastoral epistles (1-2 Timothy, Titus)",
+  "the General epistles (Hebrews, James, 1-2 Peter, 1-3 John, Jude)",
+  "the Prophets (Isaiah, Jeremiah, Ezekiel, Daniel, the Minor Prophets)",
+  "the Pentateuch/Law (Genesis-Deuteronomy)",
+  "Revelation",
+];
+
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildPlannerPrompt(
+  dayNumbers: number[],
+  recentHistory: HistoryItem[],
+  categoryHint: string[]
+): string {
   const historyLines =
     recentHistory.length > 0
       ? recentHistory.map((h) => `- Day ${h.day}: ${h.reference} (${h.theme})`).join("\n")
@@ -56,6 +90,9 @@ function buildPlannerPrompt(dayNumbers: number[], recentHistory: HistoryItem[]):
 
   return `Recently covered passages/themes (most recent first), to avoid repeating:
 ${historyLines}
+
+For variety this run, lean toward drawing from these categories (shuffled, in no particular priority order — mix across them as fits good themes, you don't need to use every one):
+${categoryHint.map((c) => `- ${c}`).join("\n")}
 
 Plan passages/themes for the following days in this personal devotional sequence, one each, in order:
 ${dayNumbers.map((d) => `Day ${d}`).join("\n")}`;
@@ -117,9 +154,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const categoryHint = shuffle(SCRIPTURE_CATEGORIES).slice(0, 4);
+
     const plan = await withTrace("Devotional Planner", async () => {
       const runner = new Runner();
-      const result = await runner.run(devotionalPlannerAgent, buildPlannerPrompt(dayNumbers, recentHistory));
+      const result = await runner.run(
+        devotionalPlannerAgent,
+        buildPlannerPrompt(dayNumbers, recentHistory, categoryHint)
+      );
       if (!result.finalOutput) throw new Error("Planner returned no output");
       return result.finalOutput as { days: { day: number; reference: string; theme: string }[] };
     });
